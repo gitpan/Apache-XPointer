@@ -1,9 +1,9 @@
-# $Id: XPointer.pm,v 1.10 2004/11/13 21:13:40 asc Exp $
+# $Id: XPointer.pm,v 1.11 2004/11/15 05:22:13 asc Exp $
 use strict;
 
 package Apache::XPointer;
 
-$Apache::XPointer::VERSION = '1.0';
+$Apache::XPointer::VERSION = '1.01';
 
 =head1 NAME
 
@@ -50,6 +50,10 @@ directly. Please use one of the scheme-specific handlers instead.
 =head2 XPath
 
 Consult L<Apache::XPointer::XPath>
+
+=head2 RDF Data Query Language (RDQL)
+
+Consult L<Apache::XPointer::RDQL>
 
 =head1 MOD_PERL COMPATIBILITY
 
@@ -210,11 +214,11 @@ sub _header_out {
 
 =head1 VERSION
 
-1.0
+1.01
 
 =head1 DATE
 
-$Date: 2004/11/13 21:13:40 $
+$Date: 2004/11/15 05:22:13 $
 
 =head1 AUTHOR
 

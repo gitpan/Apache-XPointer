@@ -38,16 +38,19 @@ SUPPPORTED SCHEMES
   XPath
     Consult Apache::XPointer::XPath
 
+  RDF Data Query Language (RDQL)
+    Consult Apache::XPointer::RDQL
+
 MOD_PERL COMPATIBILITY
     This handler will work with both mod_perl 1.x and mod_perl 2.x; it works
     better in 1.x because it supports Apache::Request which does a better
     job of parsing CGI parameters.
 
 VERSION
-    1.0
+    1.01
 
 DATE
-    $Date: 2004/11/13 21:13:40 $
+    $Date: 2004/11/15 05:22:13 $
 
 AUTHOR
     Aaron Straup Cope <ascope@cpan.org>

@@ -1,4 +1,9 @@
-# $Id: Changes,v 1.2 2004/11/13 23:30:02 asc Exp $
+# $Id: Changes,v 1.4 2004/11/15 14:58:31 asc Exp $
+
+1.01    Mon Nov 15, 2004
+
+	- updated POD to include Apache::XPointer::RDQL in
+	  list of supported schemes
 
 1.0     Sat Nov 13, 2004
 

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name: Apache-XPointer
-version: 1.0
+version: 1.01
 author:
   - Aaron Straup Cope E<lt>ascope@cpan.orgE<gt>
 abstract: mod_perl handler to address XML fragments.
@@ -15,7 +15,7 @@ build_requires:
 provides:
   Apache::XPointer:
     file: lib/Apache/XPointer.pm
-    version: 1.0
+    version: 1.01
   Apache::XPointer::XPath:
     file: lib/Apache/XPointer/XPath.pm
     version: 1.0
