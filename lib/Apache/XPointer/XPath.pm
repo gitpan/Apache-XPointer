@@ -1,10 +1,10 @@
-# $Id: XPath.pm,v 1.7 2004/11/13 23:30:02 asc Exp $
+# $Id: XPath.pm,v 1.10 2004/11/16 04:38:52 asc Exp $
 use strict;
 
 package Apache::XPointer::XPath;
 use base qw (Apache::XPointer);
 
-$Apache::XPointer::XPath::VERSION = '1.0';
+$Apache::XPointer::XPath::VERSION = '1.1';
 
 =head1 NAME
 
@@ -18,7 +18,7 @@ Apache::XPointer::XPath - mod_perl handler to address XML fragments using XPath.
    SetHandler	perl-script
    PerlHandler	Apache::XPointer::XPath
 
-   PerlSetVar   XPointerSendRangeAs  "XML"
+   PerlSetVar   XPointerSendRangeAs  "multipart/mixed"
   </FilesMatch>
 
  </Directory>
@@ -27,15 +27,17 @@ Apache::XPointer::XPath - mod_perl handler to address XML fragments using XPath.
 
  my $ua  = LWP::UserAgent->new();
  my $req = HTTP::Request->new(GET => "http://example.com/foo/bar/baz.xml");
- $req->header("Range" => qq(xmlns("x=x-urn:example")xpointer(*//x:thingy)));
+
+ $req->header("Range"  => qq(xmlns("x=x-urn:example")xpointer(*//x:thingy)));
+ $req->header("Accept" => qq(application/xml, multipart/mixed));
 
  my $res = $ua->request($req);
 
 =head1 DESCRIPTION
 
 Apache::XPointer is a mod_perl handler to address XML fragments using
-the HTTP 1.1 I<Range> header and the XPath scheme, as described in the
-paper : I<A Semantic Web Resource Protocol: XPointer and HTTP>.
+the HTTP 1.1 I<Range> and I<Accept> headers and the XPath scheme, as described
+in the paper : I<A Semantic Web Resource Protocol: XPointer and HTTP>.
 
 Additionally, the handler may also be configured to recognize a conventional
 CGI parameter as a valid range identifier.
@@ -43,30 +45,20 @@ CGI parameter as a valid range identifier.
 If no 'range' property is found, then the original document is
 sent unaltered.
 
+If an I<Accept> header is specified with no corresponding match, then the
+server will return (406) HTTP_NOT_ACCEPTABLE.
+
+Successful queries will return (206) HTTP_PARTIAL_CONTENT.
+
 =head1 OPTIONS
-
-=head2 XPointerAllowCGIRange
-
-If set to B<On> then the handler will check the CGI parameters sent with the
-request for an argument defining an XPath range.
-
-CGI parameters are checked only if no HTTP Range header is present.
-
-Case insensitive.
-
-=head2 XPointerCGIRangeParam
-
-The name of the CGI parameter to check for an XPath range.
-
-Default is B<range>
 
 =head2 XPointerSendRangeAs
 
+Return matches as one of the following content-types :
+
 =over 4
 
-=item * B<multi-part>
-
-Returns matches as type I<multipart/mixed> :
+=item * B<multipart/mixed>
 
  --match
  Content-type: text/xml; charset=UTF-8
@@ -84,9 +76,7 @@ Returns matches as type I<multipart/mixed> :
 
  --match--
 
-=item * B<XML>
-
-Return matches as type I<application/xml> :
+=item * B<application/xml>
 
  <xp:range xmlns:xp="x-urn:cpan:ascope:apache-xpointer#"
            xmlns:default="x-urn:example.com">
@@ -108,18 +98,54 @@ Return matches as type I<application/xml> :
 
 =back
 
-Default is B<XML>; case-insensitive.
+I<Required>
+
+=head2 XPointerAllowCGI
+
+If set to B<On> then the handler will check for CGI parameters as well
+as HTTP headers. CGI parameters are checked only if no matching HTTP
+header is present.
+
+Case insensitive.
+
+=head2 XPointerCGIRangeParam
+
+The name of the CGI parameter to check for an XPath range.
+
+Default is B<range>
+
+=head2 XPointerCGIAcceptParam
+
+The name of the CGI parameter to list one or more acceptable
+content types for a response.
+
+Default is B<accept>
 
 =head1 MOD_PERL COMPATIBILITY
 
-This handler will work with both mod_perl 1.x and mod_perl 2.x; it
-works better in 1.x because it supports Apache::Request which does
-a better job of parsing CGI parameters.
+This handler will work with both mod_perl 1.x and mod_perl 2.x.
 
 =cut
 
 use XML::LibXML;
 use XML::LibXML::XPathContext;
+
+sub send_as {
+    my $pkg = shift;
+    my $as  = shift;
+
+    if ($as eq "multipart/mixed") {
+	return "send_multipart";
+    }
+
+    elsif ($as eq "application/xml") {
+	return "send_xml";
+    } 
+
+    else {
+	return undef;
+    }
+}
 
 sub parse_range {
     my $pkg    = shift;
@@ -142,14 +168,14 @@ sub parse_range {
     $range =~ /xpointer\((.*)\)$/;
     $pointer = $1;
     
-    return (\%ns,$pointer);
+    return {query => $pointer,
+	    ns    => \%ns };
 }
 
-sub range {
+sub query {
     my $pkg     = shift;
     my $apache  = shift;
-    my $ns      = shift;
-    my $pointer = shift;
+    my $args    = shift;
 
     my $parser = XML::LibXML->new();
     my $doc    = undef;
@@ -167,6 +193,7 @@ sub range {
     }
     
     my $context = XML::LibXML::XPathContext->new($doc);
+    my $ns      = $args->{'ns'};
 
     foreach my $prefix (keys %$ns) {
 	$context->registerNs($prefix,$ns->{$prefix});
@@ -177,12 +204,12 @@ sub range {
     my $result = undef;
     
     eval {
-	$result = $context->findnodes($pointer);
+	$result = $context->findnodes($args->{'query'});
     };
     
     if ($@) {
 	$apache->log()->error(sprintf("failed to find nodes for '%s', %s",
-				      $pointer,$@));
+				      $args->{'query'},$@));
 
 	return {success  => 0,
 		response => $pkg->_server_error()};
@@ -195,34 +222,10 @@ sub range {
 	    result   => $result};
 }
 
-sub send_results {
-    my $pkg    = shift;
-    my $apache = shift;
-    my $res    = shift;
-    
-    if ($apache->dir_config("XPointerSendRangeAs") =~ /^multi-?part$/i) {
-	$pkg->send_multipart($apache,$res);
-    }
-    
-    else {
-	$pkg->send_xml($apache,$res);
-    }
-
-    return 1;
-}
-
 sub send_multipart {
     my $pkg    = shift;
     my $apache = shift;
     my $res    = shift;
-
-    $apache->content_type(qq(multipart/mixed; boundary="match"));
-
-    if (! $pkg->_mp2()) {
-	$apache->send_http_header();
-    }
-
-    #
 
     foreach my $node ($res->{'result'}->get_nodelist()) {
 
@@ -287,26 +290,17 @@ sub send_xml {
     
     #
 
-    $pkg->_header_out($apache,"Content-Encoding",$res->{'encoding'});
-    $apache->content_type(qq(application/xml));
-
-    if (! $pkg->_mp2()) {
-	$apache->send_http_header();
-    }
-
-    #
-
     $apache->print($doc->toString());
     return 1;
 }
 
 =head1 VERSION
 
-1.0
+1.1
 
 =head1 DATE
 
-$Date: 2004/11/13 23:30:02 $
+$Date: 2004/11/16 04:38:52 $
 
 =head1 AUTHOR
 
